@@ -1766,10 +1766,12 @@ async def reauthenticate() -> str:
         return f"Error during reauthentication: {str(e)}"
 
 
+
 def main():
-    """Entry point for the MCP server. Supports stdio (default) and SSE transports."""
+    """Entry point supporting stdio, SSE, and Streamable HTTP."""
     transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
     host = os.environ.get("MCP_HOST", "127.0.0.1")
+
     try:
         port = int(os.environ.get("MCP_PORT", "3001"))
     except ValueError:
@@ -1777,23 +1779,26 @@ def main():
 
     if transport == "stdio":
         mcp.run(transport="stdio")
-    elif transport in {"sse", "http"}:
-        # mcp SDK >= 1.27 removed the host/port kwargs from run() (they must be
-        # set on mcp.settings instead) and enabled DNS-rebinding protection with
-        # a Host allowlist of localhost only — which 421s the remote/Docker
-        # binding the operator explicitly opted into via MCP_HOST. Disable that
-        # check for the documented remote path. See issues #30 and #33.
+
+    elif transport in {"sse", "http", "streamable-http"}:
         mcp.settings.host = host
         mcp.settings.port = port
+
+        # Allow connections through the Coolify reverse proxy.
         try:
             mcp.settings.transport_security.enable_dns_rebinding_protection = False
         except Exception:
             pass
-        mcp.run(transport="sse")
+
+        if transport == "streamable-http":
+            mcp.run(transport="streamable-http")
+        else:
+            mcp.run(transport="sse")
+
     else:
         raise ValueError(
             f"Unknown MCP_TRANSPORT '{transport}'. "
-            "Use 'stdio' (default) or 'sse'."
+            "Use 'stdio', 'sse', or 'streamable-http'."
         )
 
 
